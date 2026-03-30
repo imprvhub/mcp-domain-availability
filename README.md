@@ -376,3 +376,8 @@ This project is licensed under the Mozilla Public License 2.0 - see the [LICENSE
 - [Claude Desktop](https://claude.ai/download)
 - [uv Package Manager](https://docs.astral.sh/uv/)
 - [MCP Series](https://github.com/mcp-series)
+
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/imprvhub-mcp-domain-availability).
+
