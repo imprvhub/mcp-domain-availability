@@ -299,6 +299,34 @@ If you see connection errors in Claude Desktop:
 2. **Check Python version**:
    - Ensure Python 3.10+ is available: `python3 --version`
 
+#### "ModuleNotFoundError: No module named 'mcp.server.fastmcp'"
+The MCP Python SDK 2.0.0 removed the bundled `mcp.server.fastmcp` module. This server targets the 1.x API, so its dependencies are pinned to `mcp<2.0.0`. If you hit this error, you are running a cached install that resolved the SDK before that pin:
+
+1. **Refresh the cached install**:
+   - Run `uvx --refresh --from git+https://github.com/imprvhub/mcp-domain-availability mcp-domain-availability`
+   - If uv is reusing a persistent tool install, run `uv tool upgrade mcp-domain-availability`
+
+2. **Or pin the SDK from your client config**:
+   - Add `"--with", "mcp<2.0.0"` to the `args` array in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "mcp-domain-availability": {
+      "command": "uvx",
+      "args": [
+        "--python=3.10",
+        "--from",
+        "git+https://github.com/imprvhub/mcp-domain-availability",
+        "--with",
+        "mcp<2.0.0",
+        "mcp-domain-availability"
+      ]
+    }
+  }
+}
+```
+
 ### DNS resolution issues
 If domain checks are failing:
 

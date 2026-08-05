@@ -13,7 +13,7 @@ setup(
     package_dir={"": "src"},
     python_requires=">=3.10",
     install_requires=[
-        "mcp[cli]>=1.3.0",
+        "mcp[cli]>=1.3.0,<2.0.0",
         "requests>=2.32.3", 
         "aiohttp>=3.11.13",
         "dnspython>=2.4.0",
