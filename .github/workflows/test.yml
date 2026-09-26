@@ -24,7 +24,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.2.0  # this action publishes no floating major tag
 
       - name: Install the package
         run: uv sync --python ${{ matrix.python-version }}
@@ -43,7 +43,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.2.0  # this action publishes no floating major tag
 
       - name: Install the package
         run: uv sync
@@ -102,6 +102,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0  # this action publishes no floating major tag
       - name: Install and run from the working tree
         run: uvx --from . mcp-domain-availability-cli example.com
