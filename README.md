@@ -1,6 +1,6 @@
 ## MCP Domain Availability Checker
 
-[![smithery badge](https://smithery.ai/badge/@imprvhub/mcp-domain-availability)](https://smithery.ai/server/@imprvhub/mcp-domain-availability)
+[![Smithery](https://img.shields.io/badge/Smithery-imprvhub%2Fmcp--domain--availability-8A2BE2)](https://smithery.ai/server/imprvhub/mcp-domain-availability)
 
 <table style="border-collapse: collapse; width: 100%; table-layout: fixed;">
 <tr>
@@ -16,7 +16,8 @@
 - **Domain Availability Checking**
   - Check availability across 50+ popular TLD extensions
   - Support for popular (.com, .io, .ai), country (.us, .uk, .de), and new TLDs (.app, .dev, .tech)
-  - Dual verification using DNS and WHOIS for accuracy
+  - Authoritative verification over RDAP, the protocol that replaced WHOIS
+  - WHOIS and DNS fallback for the few TLDs that publish no RDAP service
   - Smart TLD suggestions organized by popularity
 
 - **Search Capabilities**
@@ -62,7 +63,7 @@ Checking competitive AI industry domains and analyzing market availability for s
 
 ### Requirements
 
-- Python 3.10 or higher
+- Python 3.10 or higher (3.12 recommended)
 - Claude Desktop
 - [uv](https://docs.astral.sh/uv/) package manager
 
@@ -108,7 +109,7 @@ Edit this file to add the Domain Availability MCP configuration:
     "mcp-domain-availability": {
       "command": "uvx",
       "args": [
-        "--python=3.10",
+        "--python=3.12",
         "--from",
         "git+https://github.com/imprvhub/mcp-domain-availability",
         "mcp-domain-availability"
@@ -130,7 +131,7 @@ If you already have other MCPs configured, simply add the "mcp-domain-availabili
     "mcp-domain-availability": {
       "command": "uvx",
       "args": [
-        "--python=3.10",
+        "--python=3.12",
         "--from",
         "git+https://github.com/imprvhub/mcp-domain-availability",
         "mcp-domain-availability"
@@ -142,10 +143,10 @@ If you already have other MCPs configured, simply add the "mcp-domain-availabili
 
 ### Installing via Smithery
 
-To install mcp-domain-availability for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@imprvhub/mcp-domain-availability):
+To install mcp-domain-availability for Claude Desktop automatically via [Smithery](https://smithery.ai/server/imprvhub/mcp-domain-availability):
 
 ```bash
-npx -y @smithery/cli install @imprvhub/mcp-domain-availability --client claude
+npx -y @smithery/cli@latest mcp add imprvhub/mcp-domain-availability --client claude
 ```
 
 #### Manual Installation
@@ -228,29 +229,50 @@ Alternatively, you can run the commands manually.
 
 ### How It Works
 
-The MCP Domain Availability Checker uses multiple verification methods to determine domain availability:
+ICANN retired WHOIS as the required registration-data protocol in January 2025 in favour of
+**RDAP** (RFC 7482/9082), so RDAP is the primary source here. It is unambiguous: a registry's
+RDAP service answers `404` for an unregistered domain and `200` for a registered one.
 
-1. **DNS Resolution**: Checks if the domain resolves to an IP address
-2. **WHOIS Lookup**: Queries WHOIS databases for registration information
-3. **Socket Connection**: Falls back to socket-based checking when other methods aren't available
+1. **RDAP** — the registry's own RDAP service, discovered through
+   [IANA's bootstrap registry](https://data.iana.org/rdap/dns.json) (about 1,200 TLDs).
+   This is authoritative.
+2. **WHOIS** — only for TLDs with no RDAP service (`.io`, `.co`, `.me`, `.de`, `.es` and some
+   other ccTLDs). The registry's WHOIS server is found via IANA referral and queried directly
+   over port 43; only the first lines of the response are interpreted.
+3. **DNS** — a name that resolves is definitely registered.
 
-The tool combines results from these methods to provide accurate availability status, with parallel processing for checking multiple domains simultaneously.
+Each domain comes back as one of three statuses:
+
+| Status | Meaning |
+|--------|---------|
+| `available` | The registry confirmed there is no registration |
+| `taken` | The registry confirmed a registration, or the name resolves in DNS |
+| `undetermined` | No authoritative source answered. **Not** the same as available |
+
+`undetermined` exists because the previous version reported a domain as *available* whenever a
+WHOIS lookup raised an error — including when the machine had no `whois` binary installed, in
+which case every domain looked free. A result you cannot trust is now labelled as such.
+
+Domains are checked concurrently, capped at 10 in flight to stay within registry rate limits.
 
 ### Available Tools
 
-#### Domain Checking
+> **Changed in 0.2.0**: the `--domain` flag is no longer required — ask for a domain in plain
+> language. The flag is still accepted so existing prompts keep working. Bulk TLD checking moved
+> into its own tool, so asking about one domain no longer triggers ~95 lookups.
 
-| Tool Name | Description | Usage |
-|-----------|-------------|-------|
-| `check_domain` | Check domain availability with --domain flag | `mysite.com --domain` or `mysite --domain` |
+| Tool Name | Description | Parameters |
+|-----------|-------------|------------|
+| `check_domain` | Check one specific domain | `domain`: e.g. `mysite.com`. A bare name with no TLD is checked across the popular TLDs |
+| `suggest_domains` | Check one name across many TLDs | `name`: e.g. `mysite`; `category`: `popular` (default, 12), `country` (36), `new` (49) or `all` (~95) |
 
 ### Supported TLD Categories
 
 #### Popular TLDs (12)
 com, net, org, io, ai, app, dev, co, xyz, me, info, biz
 
-#### Country TLDs (35)
-us, uk, ca, au, de, fr, it, es, nl, jp, kr, cn, in, br, mx, ar, cl, co, pe, ru, pl, cz, ch, at, se, no, dk, fi, be, pt, gr, tr, za, eg, ma, ng, ke
+#### Country TLDs (36)
+us, uk, ca, au, de, fr, it, es, nl, jp, kr, cn, in, br, mx, ar, cl, pe, ru, pl, cz, ch, at, se, no, dk, fi, be, pt, gr, tr, za, eg, ma, ng, ke
 
 #### New TLDs
 tech, online, site, website, store, shop, cloud, digital, blog, news & more.
@@ -262,30 +284,47 @@ Here are examples of how to use the MCP Domain Availability Checker with Claude:
 #### Single Domain Check
 
 ```
-Check if mysite.com is available using --domain
+Is mysite.com available?
 ```
 
 #### Domain Name Research
 
 ```
-Check availability for "startup" across all TLDs using --domain
+Check "startup" across all TLDs
 ```
 
 #### Specific Domain Verification
 
 ```
-Is awesome.io available? Use --domain to check
+Is awesome.io taken?
 ```
 
 ### Output Format
 
 The tool provides comprehensive results including:
 
-- **Requested Domain**: Status of the exact domain queried (if specific TLD provided)
-- **Available Domains**: List of available domains sorted alphabetically
-- **Unavailable Domains**: List of registered domains
+- **Requested Domain**: Status of the exact domain queried (if a specific TLD was provided)
+- **Available Domains**: Confirmed unregistered, sorted alphabetically
+- **Unavailable Domains**: Confirmed registered
+- **Undetermined Domains**: No authoritative answer, with the reason
 - **Summary Statistics**: Breakdown by TLD categories (Popular, Country, New TLDs)
-- **Performance Metrics**: Check duration for each domain
+- **Performance Metrics**: Check duration and which source answered (`rdap`, `whois` or `dns`)
+
+### Development
+
+Run the offline test suite (no network required):
+
+```bash
+uv sync
+uv run python -m unittest discover -s tests -v
+```
+
+Check a domain from the command line:
+
+```bash
+uv run mcp-domain-availability-cli example.com
+uv run mcp-domain-availability-cli mysite popular
+```
 
 ### Troubleshooting
 

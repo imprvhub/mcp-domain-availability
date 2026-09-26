@@ -1,10 +1,11 @@
-name: Publish MCP Package
+name: Publish container image
 
-on: 
-  push:
-    branches: [main]
+# Only on a tagged release, or by hand. This used to run on every push to main,
+# which republished :latest for unrelated commits.
+on:
   release:
     types: [published]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -15,53 +16,23 @@ jobs:
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        
-      - name: Test installation
-        run: |
-          uvx --python=3.10 --from . mcp-domain-availability --help || echo "Help not available, but package installed successfully"
-          
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v7
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Convert Repository name to lower case
-        id: lowercase
-        run: echo "REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-        
-      - name: Build and push Docker image
-        run: |
-          docker build . --tag ghcr.io/${{ env.REPO }}:latest
-          docker push ghcr.io/${{ env.REPO }}:latest
 
-  test-installation:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        
-      - name: Test direct installation from git
+      - name: Lower-case the repository name
+        run: echo "REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Build and push
         run: |
-          uvx --python=3.10 --from git+https://github.com/${{ github.repository }} mcp-domain-availability --help || echo "Installation test completed"
+          TAG="${{ github.event_name == 'release' && github.event.release.tag_name || 'latest' }}"
+          docker build . --tag "ghcr.io/${REPO}:${TAG}" --tag "ghcr.io/${REPO}:latest"
+          docker push "ghcr.io/${REPO}:${TAG}"
+          docker push "ghcr.io/${REPO}:latest"

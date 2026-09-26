@@ -1,4 +1,4 @@
-name: Test MCP Installation
+name: Test
 
 on:
   push:
@@ -7,65 +7,101 @@ on:
     branches: [main]
 
 jobs:
-  test-installation:
+  unit:
+    name: Unit tests (python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-    
-    - name: Test local installation
-      run: |
-        uv sync
-        uv run python -c "from mcp_domain_availability.main import check_domain; print('✓ Import successful')"
-    
-    - name: Test CLI functionality
-      run: |
-        uv run mcp-domain-availability-cli test --domain || echo "CLI test completed"
-    
-    - name: Test uvx installation from current repo
-      run: |
-        uvx --python=${{ matrix.python-version }} --from . mcp-domain-availability --help || echo "uvx test completed"
+        python-version: ['3.10', '3.11', '3.12', '3.13']
 
-  test-domain-check:
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+
+      - name: Install the package
+        run: uv sync --python ${{ matrix.python-version }}
+
+      - name: Run the offline test suite
+        run: uv run --python ${{ matrix.python-version }} python -m unittest discover -s tests -v
+
+  smoke:
+    name: Live registry smoke test
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-    
-    - name: Install dependencies
-      run: uv sync
-    
-    - name: Test domain checking functionality
-      run: |
-        uv run python -c "
-        import asyncio
-        from mcp_domain_availability.main import check_domain
-        import json
-        
-        async def test_check_domain():
-            result = await check_domain('nonexistentdomain12345 --domain')
-            print('Domain check test result:')
-            print(json.dumps(result, indent=2))
-            assert 'total_checked' in result
-            print('✓ Domain check functionality works')
-        
-        asyncio.run(test_check_domain())
-        "
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10
+
+      - name: Install the package
+        run: uv sync
+
+      # A known-registered and a known-free domain, so a wrong verdict fails the build
+      # rather than being masked by "|| echo".
+      - name: Check a registered and an unregistered domain
+        run: |
+          uv run python - <<'PY'
+          import asyncio, json, sys
+          from mcp_domain_availability.main import check_single_domain
+
+          async def main():
+              taken = await check_single_domain("google.com")
+              free = await check_single_domain("zzqqxxnonexistent99887.com")
+              print(json.dumps({"taken": taken, "free": free}, indent=2))
+              assert taken["status"] == "taken", taken
+              assert free["status"] == "available", free
+              print("registry lookups agree with expectations")
+
+          asyncio.run(main())
+          PY
+
+      - name: Check the server starts and lists its tools over stdio
+        run: |
+          uv run python - <<'PY'
+          import json, subprocess, sys
+
+          proc = subprocess.Popen(
+              [sys.executable, "-m", "mcp_domain_availability.main"],
+              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+          )
+          def send(msg):
+              proc.stdin.write(json.dumps(msg) + "\n")
+              proc.stdin.flush()
+
+          send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+              "protocolVersion": "2025-06-18", "capabilities": {},
+              "clientInfo": {"name": "ci", "version": "1"}}})
+          init = json.loads(proc.stdout.readline())
+          assert "result" in init, init
+          send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+          send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+          listed = json.loads(proc.stdout.readline())
+          proc.kill()
+          names = sorted(t["name"] for t in listed["result"]["tools"])
+          print("tools:", names)
+          assert names == ["check_domain", "suggest_domains"], names
+          for tool in listed["result"]["tools"]:
+              assert tool.get("description"), f"{tool['name']} has no description"
+          print("stdio handshake and tool list OK")
+          PY
+
+  uvx:
+    name: uvx install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - name: Install and run from the working tree
+        run: uvx --from . mcp-domain-availability-cli example.com

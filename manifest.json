@@ -1,0 +1,34 @@
+{
+  "manifest_version": "0.2",
+  "name": "mcp-domain-availability",
+  "display_name": "Domain Availability MCP",
+  "version": "0.2.0",
+  "description": "Check whether domain names are available, across ~95 TLDs, via RDAP.",
+  "long_description": "A Model Context Protocol server for domain availability. Checks a specific domain, or one name across the popular, country-code or new TLD sets. Availability comes from the registry's own RDAP service (the protocol that replaced WHOIS in January 2025), with WHOIS and DNS as fallbacks for the TLDs that publish no RDAP service. Results that no authoritative source could confirm are reported as undetermined rather than guessed. Requires uv on the host, which resolves the Python dependencies for your platform on first run.",
+  "author": {
+    "name": "Iván Luna",
+    "email": "contact@ivanluna.dev",
+    "url": "https://github.com/imprvhub"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/imprvhub/mcp-domain-availability"
+  },
+  "homepage": "https://github.com/imprvhub/mcp-domain-availability",
+  "documentation": "https://github.com/imprvhub/mcp-domain-availability#readme",
+  "license": "MPL-2.0",
+  "keywords": ["domain", "rdap", "whois", "dns", "availability", "tld", "mcp"],
+  "server": {
+    "type": "python",
+    "entry_point": "src/mcp_domain_availability/main.py",
+    "mcp_config": {
+      "command": "uvx",
+      "args": ["--from", "${__dirname}", "mcp-domain-availability"],
+      "env": {}
+    }
+  },
+  "user_config": {},
+  "compatibility": {
+    "runtimes": { "python": ">=3.10" }
+  }
+}
